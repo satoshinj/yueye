@@ -1,0 +1,25 @@
+# 在线文档阅读与离线保存助手 - 依赖清单
+# Python 3.10+
+
+# 浏览器自动化
+playwright>=1.62.0        # 1.44 太旧，与新版 Edge(151+) 可能协议不兼容
+
+# 图片与 PDF 处理
+Pillow==10.3.0
+img2pdf==0.5.1
+
+# 导出 Word（旧版用 RTF + \ansi，中文必乱码）
+python-docx==1.1.2
+
+# PDF 回读校验（测试用；纯 Python，无本机编译依赖）
+pypdf==4.2.0
+
+# GUI
+PySide6==6.7.1
+
+# 注：不再依赖 PyMuPDF —— 本机 wheel 缺 MSVC 运行库，import 即 DLL 报错，
+#     且仅用于测试期回读校验，已用 pypdf 代替。
+# 注：不再直接依赖 beautifulsoup4/requests/reportlab —— 内容提取与 PDF 渲染
+#     都在浏览器里完成，这些包已无调用点。
+# 注：lxml 不要排除！它是 python-docx 的必需依赖，漏掉后 Word 导出会在运行时
+#     报 ModuleNotFoundError（打包时踩过这个坑，由 selftest 抓到）。

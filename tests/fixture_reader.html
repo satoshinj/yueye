@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>测试文档 - 本地阅读器</title>
+<style>
+  body { margin:0; font-family: sans-serif; }
+  #toolbar { padding:8px; background:#333; color:#fff; }
+  #pageNumInput { width:50px; }
+  #pageContainer { margin:20px auto; width:890px; }
+  canvas.inner_page { border:1px solid #ccc; display:block; }
+  canvas.postil_page { position:absolute; pointer-events:none; }
+</style>
+</head>
+<body>
+
+<div id="toolbar" class="toolbar">
+  <div class="mainpart">
+    <ul id="item-page-panel" class="tb-item">
+      <li><a id="prePageButton">&lt;</a></li>
+      <li><input id="pageNumInput" class="num" value="1"></li>
+      <li class="text">/ 12</li>
+      <li><a id="nextPageButton">&gt;</a></li>
+    </ul>
+  </div>
+</div>
+
+<div id="pptContainer">
+  <div id="pageContainer" class="page_view">
+    <div id="outer_page_1" class="outer_page">
+      <canvas id="postil_1" class="postil_page" width="890" height="1259"></canvas>
+      <canvas id="page_1" class="inner_page" width="890" height="1259"></canvas>
+    </div>
+  </div>
+</div>
+
+<div id="gate" style="display:none; padding:20px; color:#c00; font-size:18px;"></div>
+
+<script>
+// 注：真实 doc88 会破坏 Playwright 的结构化序列化（evaluate 返回数组/对象
+// 得到 null），但 JSON.stringify 本身仍可用——这正是 sites.jseval() 的绕过
+// 依据。该行为已在实测中确认，此处不模拟：能简单模拟出来的写法会连
+// JSON.stringify 一起打断，反而与真实情况不符。
+
+// ---- 模拟阅读器 ----
+const QS = new URLSearchParams(location.search);
+const TOTAL = 12;                   // 总页数
+const FREE_LIMIT = parseInt(QS.get('free') || TOTAL);
+let cur = 1;
+
+// ?noinput=1 拿掉页码输入框，用于验证翻页策略能自动降级到「下一页按钮」
+if (QS.get('noinput')) {
+  const el = document.getElementById('pageNumInput');
+  el.parentElement.removeChild(el);
+}
+
+const cv = document.getElementById('page_1');
+const ctx = cv.getContext('2d');
+
+function draw(n) {
+  // 每页画明显不同的内容，便于校验"页面唯一性"
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 120px serif';
+  ctx.fillText('第 ' + n + ' 页', 200, 300);
+  ctx.font = '32px serif';
+  ctx.fillText('测试文档正文内容 ' + n, 200, 400);
+  // 画点随页码变化的图形，保证像素级差异
+  ctx.fillStyle = 'hsl(' + (n * 29 % 360) + ',70%,50%)';
+  ctx.fillRect(200, 500, 400, 200 + n * 10);
+  ctx.fillStyle = '#666';
+  ctx.font = '20px monospace';
+  for (let i = 0; i < 12; i++) {
+    ctx.fillText('行 ' + (n * 100 + i) + ' 的示例文本内容', 200, 800 + i * 30);
+  }
+}
+
+// ?hint=1 模拟 doc88 的真实坑：页面挂着「还剩 N 页未读」的引导浮层，
+// 但内容其实照样能翻。程序不能因为看到这行字就停止。
+if (QS.get('hint')) {
+  const g = document.getElementById('gate');
+  g.style.display = 'block';
+  g.innerText = '还剩 100 页未读，是否继续阅读？';
+}
+
+function gate() {
+  // 超出免费页数后模拟付费墙：页码变但内容不再更新
+  const g = document.getElementById('gate');
+  if (QS.get('hint')) return false;      // 只是提示文案，不拦内容
+  if (cur > FREE_LIMIT) {
+    g.style.display = 'block';
+    g.innerText = '还剩 ' + (TOTAL - FREE_LIMIT) + ' 页未读，是否继续阅读？请拖动滑块继续阅读';
+    return true;
+  }
+  g.style.display = 'none';
+  return false;
+}
+
+function render() {
+  const inp = document.getElementById('pageNumInput');
+  if (inp) inp.value = String(cur);
+  if (gate()) return;              // 被墙：不重绘，canvas 停在上一页
+  // 模拟渲染延迟，验证"等渲染稳定"逻辑而非固定 sleep
+  setTimeout(() => draw(cur), 120 + Math.random() * 200);
+}
+
+document.getElementById('nextPageButton').onclick = () => {
+  if (cur < TOTAL) { cur++; render(); }
+};
+document.getElementById('prePageButton').onclick = () => {
+  if (cur > 1) { cur--; render(); }
+};
+const inpEl = document.getElementById('pageNumInput');
+if (inpEl) {
+  inpEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const n = parseInt(e.target.value);
+      if (n >= 1 && n <= TOTAL) { cur = n; render(); }
+    }
+  });
+}
+
+draw(1);
+</script>
+</body>
+</html>
