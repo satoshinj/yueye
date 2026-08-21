@@ -68,7 +68,7 @@ class DocCrawler:
                  render_timeout: float = 8.0, poll_interval: float = 0.08,
                  should_stop=None, on_progress=None, block_ads: bool = True,
                  block_wait: float = 180.0, adapter=None, route: str = "",
-                 max_retries: int = 4, **_ignored):
+                 max_retries: int = 4, custom_browser_path: str | None = None, **_ignored):
         # 有头是默认：doc88 等站点对 headless 有降级投喂，且滑块验证需人工完成
         self.headless = headless
         self.user_agent = user_agent
@@ -90,6 +90,7 @@ class DocCrawler:
         self.route = route
         # 单页最多重试几次再放弃（阅读器常常只是还没渲染好）
         self.max_retries = max_retries
+        self.custom_browser_path = custom_browser_path
 
     # ------------------------------------------------------------------
     def crawl(self, url: str) -> CrawlResult:
@@ -102,7 +103,8 @@ class DocCrawler:
         with sync_playwright() as pw:
             ctx, page = sess.open_context(
                 pw, headless=self.headless, user_agent=self.user_agent,
-                block_ads=self.block_ads)
+                block_ads=self.block_ads,
+                custom_browser_path=self.custom_browser_path)
             self.log(f"浏览器: {sess.active_channel}")
             try:
                 self._run(page, adapter, url, result)

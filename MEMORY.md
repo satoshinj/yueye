@@ -10,7 +10,8 @@
 | 项 | 位置 |
 |---|---|
 | 仓库 | `https://github.com/bitcoinjohnny/yueye` · **public** · 分支 `master` |
-| Release | 当前 **v1.0.0** |
+| Release | 当前 **v1.0.3** · 上一版 v1.0.2、v1.0.1、v1.0.0 保留。
+| 官网 / 主页 | `https://yueye.jingzhiacademy.com/` | |
 | 登录态 | `%USERPROFILE%\.docsaver\browser`（持久化浏览器上下文，**不在**发布包里） |
 
 ---

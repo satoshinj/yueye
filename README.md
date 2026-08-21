@@ -1,192 +1,109 @@
 # 阅页 · Yueye
 
-**把你已经有权阅读的在线文档，收成可检索的离线副本。**
+<p align="center">
+  <strong>把你有权阅读的在线文档，收成清晰可搜的离线副本。</strong>
+  <br />
+  <em>Turn online documents you already have access to into searchable offline copies.</em>
+</p>
 
-*Turn the online documents you already have access to into searchable offline copies.*
+<p align="center">
+  <a href="https://yueye.jingzhiacademy.com/"><img src="https://img.shields.io/badge/官网-yueye.jingzhiacademy.com-blue?style=flat-square" alt="Website" /></a>
+  <a href="https://github.com/satoshinj/yueye/releases"><img src="https://img.shields.io/github/v/release/satoshinj/yueye?style=flat-square&color=success" alt="Release" /></a>
+  <img src="https://img.shields.io/badge/平台-Windows%2010%20%2F%2011-lightgrey?style=flat-square" alt="Platform" />
+  <img src="https://img.shields.io/badge/协议-MIT-orange?style=flat-square" alt="License" />
+</p>
 
-一个 Windows 桌面工具：输入网页或在线文档地址，它用**你本人已登录的浏览器会话**打开页面，把你有权查看的内容保存成 PDF、Word、Markdown、纯文本或图片。
-
-> 使用前请阅读 **[DISCLAIMER.md](DISCLAIMER.md)** —— 本工具只处理你有权查看的内容，不解密内容保护、不破解验证码、不代你完成滑块验证。
+<p align="center">
+  <b>简体中文</b> |
+  <a href="README_EN.md">English</a> |
+  <a href="README_JA.md">日本語</a> |
+  <a href="README_KO.md">한국어</a> |
+  <a href="README_ES.md">Español</a> |
+  <a href="README_FR.md">Français</a> |
+  <a href="README_DE.md">Deutsch</a> |
+  <a href="README_RU.md">Русский</a>
+</p>
 
 ---
 
-## 核心能力
+> [!IMPORTANT]
+> **合规使用提醒**：本工具仅供个人离线保存**已登录且有权查看**的内容。服务端按权限下发数据，无权限页面不传输。不解密保护、不破解验证码、不代填滑块。详见 [DISCLAIMER.md](DISCLAIMER.md)。
 
-### 智能线路判定 —— 不是无脑截图
+---
 
-自动识别页面形态，在三条线路间选择：
+## ✨ 核心特性
 
-| 线路 | 适用 | 输出 | 特点 |
-|---|---|---|---|
-| **网页文章** | 正文在 DOM 里的文章页 | **文字型 PDF** | 可选中、可全文搜索，体积小一个数量级 |
-| **分页阅读器** | canvas / 图片翻页的阅读器 | 图片型 PDF | 逐页原生像素，文字不可选 |
-| **整页截图** | 前两者都不适用时兜底 | 图片型 PDF | 一张长图 |
+| 模块 | 核心能力 | 优势说明 |
+|---|---|---|
+| **智能线路判定** | 网页文章 / 分页阅读器 / 整页截图 自动选择 | DOM 文章优先输出**文字型 PDF**（可选中搜索，体积小 90%）；Canvas 阅读器出原生像素 |
+| **极致性能** | `canvas.toDataURL` 读原生像素 + 哈希探针 | **26 ms/页** 取图（比传统截屏快 8 倍），画好即走（基准 0.75s/页），百页秒级导出 |
+| **运行时试错** | 输入框 → 下一页按钮 → 滚动容器 → 键盘翻页 | **不硬编码选择器**，自动探测并锁定有效翻页方式，泛化支持各类文库 |
+| **抗断与即时响应** | 预热机制 + 退避重试 + 毫秒级停止 | 前页卡顿自动重试与去遮挡；随时点击「停止」即刻退出，不被超时阻塞 |
+| **多浏览器兼容** | 自动发现 Edge / Chrome / 360 / QQ / Brave / Cent | 自动清理僵尸锁，彻底去除自动化控制横幅，支持内网 SSL 与网络代理穿透 |
+| **多格式与局部截取** | PDF（文字/图像）/ Word / Markdown / 纯文本 / 图片 | 支持指定页码区间（如 `1-10`）；导出在后台线程异步执行，界面不卡顿 |
 
-实测同一内容：文字线路 **73 KB 且可全文搜索**，图片线路 **881 KB 且不可搜索**。
-**只要正文在 DOM 里，就优先走文字线路。** 也可在界面上手动指定。
+---
 
-### 取像素，而不是截屏 —— 快 8 倍
+## 🚀 快速开始
 
-用 `canvas.toDataURL` 直接读画布原生像素：
+### 方式 A：免安装版（推荐 · 无需 Python 环境）
 
-| 方式 | 耗时 |
-|---|---|
-| `canvas.toDataURL()` | **26 ms** |
-| `element.screenshot()` | 211 ms |
+1. 从 [GitHub Releases](https://github.com/satoshinj/yueye/releases) 下载 `Yueye-v1.0.3-win-x64.zip` 并解压。
+2. 双击运行 `阅页.exe`：
+   - 先点 **「登录浏览器」**：在弹出窗口中登录目标平台账号（一次登录，长期有效）。
+   - 粘贴文档链接，选好格式与页码范围，点击 **「开始抓取」** 即可。
 
-且不受滚动位置、视口大小、CSS 缩放影响，出图尺寸恒等于文档原始分辨率。
+### 方式 B：CLI 命令行（脚本化批处理）
 
-### 等渲染，不等秒表
+```cmd
+# 导出整篇文档为 PDF
+阅页.exe --url "https://..." --format pdf
 
-用 48×48 缩略图哈希做渲染稳定探针（约 2 ms，可高频轮询），替代固定 `sleep`。
-页面画好就立刻继续，画不好就多等 —— 本地基准 **0.75 秒/页**。
+# 仅抓取第 1~10 页并导出为 Markdown 到指定目录
+阅页.exe --url "https://..." --format markdown --range 1-10 --out ./output
 
-### 翻页策略自动试错
-
-四种策略逐个实测，哪个真让内容变化就锁定哪个，之后一直用它：
-
+# 指定本地特定浏览器路径运行
+阅页.exe --url "https://..." --browser "C:\Path\To\360chrome.exe"
 ```
-页码输入框 → 下一页按钮 → 滚动容器 → 键盘翻页
-```
 
-**不为每个站硬编码选择器** —— 因此未收录的站点也能直接尝试。
-
-### 抓不动就重试，而不是立刻放弃
-
-- **阅读器预热**：正式抓取前先翻一页再回来，逼它把资源加载完
-- **退避重试**：单页失败按 1.2s / 2.4s / 3.6s / 4.8s 重试，期间自动关闭遮挡浮层、重新跳页
-- **页码回读校验**：翻页后确认阅读器真的到了目标页
-
-### 绝不假装成功
-
-- 抓不全一定**明确停止并说明原因**，不会用截图凑数
-- 页面两两去重：内容没真正推进会被识别出来，不会把同一页记成多页
-- 进度条显示真实的 `当前页 / 总页数`
-
-### 五种导出格式
-
-PDF（文字型 / 图片型）· Word `.docx` · Markdown（含图片资源目录）· 纯文本 · 图片合集
-图片型 PDF 走无损路径，不做中间的有损重编码。
-
-### 免安装分发
-
-- 打包后双击即用，对方**不需要装 Python、不需要装任何依赖**
-- 驱动系统已有的 **Edge / Chrome**，因此**不随程序分发 320 MB 的 Chromium**，也省掉 `playwright install`
-- **打包自检**：验证冻结环境下浏览器驱动、抓取、PDF 与 Word 导出全链路可用
-- **浏览器诊断**：列出本机浏览器路径并实际启动一次，输出完整报告
-
-### 登录态长期保存
-
-用持久化浏览器上下文保存会话，一次登录长期有效。
-不解密浏览器 Cookie 数据库 —— 新版 Chrome/Edge 启用 App-Bound Encryption 后，那条路已不可行。
-
----
-
-## 为什么必须先登录
-
-内容由目标网站的服务端**按账号权限下发**。没登录时，超出免费试读范围的页面**根本不会传输到你的设备上**。
-
-「只抓到几页」几乎都是这个原因，不是程序坏了。
-
-> **关于「还剩 N 页未读」这类提示**
->
-> 部分网站会异步弹出这类引导层。**程序不会仅凭这行文字就中断**，因为它的出现并不等同于当前账号没有权限（同一账号同一文档，该提示可能出现也可能不出现）。程序会继续尝试翻页；若确实无权限，服务端不会下发内容，程序会在重试后停止并说明原因。
->
-> **是否有权阅读，取决于你的账号权限和你与该网站的协议。请勿用本工具获取你无权查看的内容。** 详见 [DISCLAIMER.md](DISCLAIMER.md)。
-
----
-
-## 兼容性说明
-
-| 平台 | 验证程度 |
-|---|---|
-| 道客巴巴 doc88 | 阅读器结构**经实测验证** |
-| 人人文库 renrendoc | 有专用适配器，未逐站验收 |
-| 原创力 book118、豆丁 docin、百度文库、MBA智库、360文库、淘豆网、蚂蚁文库、装配图网、爱问共享资料 | 通用结构探测，**未逐站验收** |
-| 未列出的站点 | 可直接尝试，由通用结构探测判定 |
-
-除道客巴巴的阅读器结构经过实测验证外，其余平台走通用结构探测，**未逐站验收**，效果因站点改版而异。
-
-**能否取到内容，取决于你的账号在该站的权限** —— 列在这里不代表能取到你无权查看的内容。
-
----
-
-## 运行
-
-### 开发方式
+### 方式 C：源码运行（开发者）
 
 ```bash
+git clone https://github.com/satoshinj/yueye.git
+cd yueye
 pip install -r requirements.txt
-playwright install chromium      # 开发时用内置 Chromium；打包版用系统 Edge
+playwright install chromium      # 驱动本地 Edge 时无需下载完整内核
 python app.py
 ```
 
-### 打包成免安装版
+---
 
-```cmd
+## 📊 平台兼容性说明
+
+| 平台类型 | 代表站点 | 支持策略 | 验证程度 |
+|---|---|---|---|
+| **专用适配** | 道客巴巴 (Doc88) | 专用翻页适配器 + 标注层过滤 | ✅ 逐项实测验证 |
+| **结构适配** | 人人文库 (RenrenDoc) | 专用翻页与 DOM 结构提取 | ⚠️ 有适配器，未逐站验收 |
+| **通用探测** | 原创力、豆丁、百度文库、MBA智库、360文库、淘豆等 | `AutoReader` 运行时探测翻页与像素 | ⚠️ 通用结构探测，效果视站点改版而定 |
+
+> 📌 **能否获取内容严格取决于账号自身权限**；除道客巴巴外其余站点均为通用结构探测。
+
+---
+
+## 🛠️ 测试与打包
+
+```bash
+# 运行 11 组离线核心行为回归测试（本地 fixture，不依赖外网）
+python tests/test_engine.py
+
+# 一键打包免安装版并执行 selftest 自动化全链路自检
 build.bat
 ```
 
-产物 `dist\阅页\`，整个文件夹拷给别人就能用。约 240 MB，需对方电脑有 Edge 或 Chrome。
-
-`build.bat` 最后会自动运行 `selftest.exe` 验证打包产物真的能驱动浏览器完成一次抓取 —— **GUI 能启动不代表能抓取**（node driver 路径在冻结后会变），所以打包必须以自检通过为准。
-
-### 使用步骤
-
-1. **先点「登录浏览器」**，在弹出的真实浏览器里登录目标站点（扫码 / 密码 / 短信 / 滑块都由你自己操作），关窗即保存
-2. 粘贴文档 URL，选好输出格式（线路留「自动判定」即可）
-3. 点「开始抓取」，可随时「停止」
-4. 抓完自动导出到程序所在目录
-
 ---
 
-## 项目结构
+## 📝 许可证与免责
 
-```
-yueye/
-├── app.py          GUI 主程序 (PySide6)
-├── crawler.py      抓取引擎：线路调度、翻页状态机、重试与停止判定
-├── sites.py        站点适配器：Doc88 / RenrenDoc / AutoReader(通用探测)
-├── routes.py       文章线路：正文提取、打印清理、文字型 PDF 渲染
-├── session.py      持久化登录态 + 浏览器降级链 + 环境诊断
-├── exporter.py     导出 PDF / docx / Markdown / 文本 / 图片
-├── config.py       配置
-├── selftest.py     打包后自检：验证冻结环境下浏览器驱动可用
-├── build.bat       一键打包（含自检）
-├── build.spec      PyInstaller 配置（主程序）
-├── selftest.spec   PyInstaller 配置（自检程序）
-├── tests/
-│   ├── fixture_reader.html   模拟分页阅读器（含浮层、渲染延迟、权限限制）
-│   ├── fixture_article.html  模拟文章页（含导航/评论/页脚噪声）
-│   └── test_engine.py        8 组行为测试，不依赖外网
-└── e2e_test.py     对真实 URL 的端到端测试
-```
+代码以 [MIT License](LICENSE) 开源。
 
-## 测试
-
-```bash
-python tests/test_engine.py          # 本地 fixture，不联网、不敲打真实站点
-python e2e_test.py <URL>             # 真实站点
-```
-
-断言的是**行为正确性**而非「跑通」：页数与声称一致、页面两两不重复（重复说明翻页失败被当成新页）、导出 PDF 回读页数一致、文章线路文字可提取且噪声被剔除、翻页策略在主策略不可用时能自动降级、引导浮层不被误判为权限墙。
-
----
-
-## 实现要点（踩过的坑）
-
-- **不能用 `querySelector('a, b, c')` 表达优先级** —— 逗号列表按文档顺序返回。某站的标注层 canvas 排在内容层前面，用逗号列表会一直拿到空白画布，翻页探测因此永远判定「内容没变」。
-- **某站篡改了 JS 结构化序列化** —— `page.evaluate` 返回数组/对象一律得 `None` **且不报错**（静默失败，极难排查）。所有 evaluate 必须返回 `JSON.stringify(...)` 字符串再解析。
-- **有头模式为默认** —— 站点会识别无头浏览器并降级投喂内容，且滑块验证需人工完成。
-- **`python-docx` 依赖 `lxml`** —— 打包时排除 lxml 会让 Word 导出在运行时才崩，GUI 启动完全正常。这个坑由 `selftest.exe` 抓到。
-- **冻结后不能用 `Path(__file__).parent` 定位输出目录** —— 它会指向 `_internal\`，日志和导出文件会被写进程序内部。
-
----
-
-## 许可与免责
-
-代码以 [MIT License](LICENSE) 发布。
-
-使用本工具前请阅读 **[DISCLAIMER.md](DISCLAIMER.md)**。本工具仅供个人离线阅读自己有权访问的内容，请勿用于盗版、侵权或违反平台条款的行为，使用者需自行承担相关责任。
-
-强制性国家标准请优先通过「国家标准全文公开系统」查阅；学术论文优先走机构订阅、arXiv、PubMed Central 或按 DOI 查询开放获取版本 —— **本工具是这些渠道之外的兜底手段。**
+使用前请完整阅读 **[DISCLAIMER.md](DISCLAIMER.md)**。强制性国家标准请优先通过「国家标准全文公开系统」查阅；学术论文请优先走机构订阅、arXiv、PubMed Central 或按 DOI 查询开放获取版本。

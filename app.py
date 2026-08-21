@@ -253,7 +253,8 @@ class MainWindow(QMainWindow):
         def task():
             ok = False
             try:
-                ok = bool(sess.login_flow(url, log=self._log_safe))
+                ok = bool(sess.login_flow(url, log=self._log_safe,
+                                         custom_browser_path=self.cfg.custom_browser_path))
             except Exception as e:
                 write_log(traceback.format_exc())
                 self._log_safe(f"登录失败: {e}")
@@ -311,6 +312,7 @@ class MainWindow(QMainWindow):
                     route=route,
                     start_page=start_p,
                     end_page=end_p,
+                    custom_browser_path=self.cfg.custom_browser_path,
                     should_stop=lambda: self._stop_flag,
                     on_progress=self._progress_safe,
                 )
@@ -474,6 +476,7 @@ def run_cli(args) -> int:
     fmt = args.format.lower()
     out_dir = Path(args.out) if args.out else app_dir()
     start_p, end_p = parse_page_range(args.range or "")
+    custom_b = args.browser.strip() if args.browser else None
     print(f"[CLI] 开始抓取: {url}")
     print(f"[CLI] 格式: {fmt} | 线路: {args.route or '自动'} | 页码: {start_p}~{end_p or '全篇'} | 目标: {out_dir}")
 
@@ -484,6 +487,7 @@ def run_cli(args) -> int:
         route=args.route or "",
         start_page=start_p,
         end_page=end_p,
+        custom_browser_path=custom_b,
     )
     result = crawler.crawl(url)
     if result.page_count == 0 and not result.pdf_bytes:
@@ -506,6 +510,7 @@ def main():
         parser.add_argument("--range", default="", help="页码范围，如 1-10")
         parser.add_argument("--headless", action="store_true", help="无头模式（不建议）")
         parser.add_argument("--img", default="png", choices=["png", "jpeg"], help="图片格式")
+        parser.add_argument("--browser", default="", help="自定义浏览器可执行文件完整路径")
         args = parser.parse_args()
         sys.exit(run_cli(args))
 

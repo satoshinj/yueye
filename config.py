@@ -32,10 +32,11 @@ class Config:
     output_dir: str = ""                 # 留空表示"程序所在目录"，见 load_config
     default_format: str = "pdf"          # pdf / word / markdown / text / images
     scroll_pause: float = 2.0            # 每次滚动暂停秒数
+    custom_browser_path: str = ""        # 自定义浏览器路径（留空自动探测）
     user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
+        "Chrome/131.0.0.0 Safari/537.36"
     )
 
 
