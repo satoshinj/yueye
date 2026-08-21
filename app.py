@@ -16,7 +16,7 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QMetaObject, Q_ARG, Slot
+from PySide6.QtCore import Qt, QMetaObject, Q_ARG, Slot, QEvent
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -28,6 +28,22 @@ from config import Config, load_config, app_dir
 from crawler import DocCrawler
 import session as sess
 import exporter as exp
+
+
+def parse_page_range(text: str) -> tuple[int, int | None]:
+    """解析形如 '1-10', '5', '3-' 的页码范围。"""
+    s = text.strip()
+    if not s:
+        return 1, None
+    if "-" in s:
+        parts = s.split("-", 1)
+        start = int(parts[0].strip()) if parts[0].strip().isdigit() else 1
+        end = int(parts[1].strip()) if parts[1].strip().isdigit() else None
+        return max(1, start), end
+    if s.isdigit():
+        val = int(s)
+        return val, val
+    return 1, None
 
 
 # 日志文件固定放在工具目录下
@@ -118,6 +134,13 @@ class MainWindow(QMainWindow):
         self.img_combo.addItem("JPEG(体积小)", "jpeg")
         grp_layout.addWidget(self.img_combo)
 
+        grp_layout.addWidget(QLabel("页码:"))
+        self.range_edit = QLineEdit()
+        self.range_edit.setPlaceholderText("如 1-10 / 留空全选")
+        self.range_edit.setToolTip("可选：只抓取指定页码范围，如 1-10 或 5；留空抓取全篇")
+        self.range_edit.setFixedWidth(115)
+        grp_layout.addWidget(self.range_edit)
+
         # 有头是默认: 站点对 headless 有降级投喂, 且滑块验证需人工完成
         self.headless_check = QCheckBox("无头模式")
         self.headless_check.setChecked(False)
@@ -166,6 +189,21 @@ class MainWindow(QMainWindow):
         row_btn.addWidget(self.btn_diag)
         row_btn.addStretch(1)
         root.addLayout(row_btn)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
+            self._check_clipboard()
+
+    def _check_clipboard(self):
+        try:
+            cb = QApplication.clipboard()
+            text = (cb.text() or "").strip()
+            if (text.startswith("http://") or text.startswith("https://")) and not self.url_edit.text().strip():
+                self.url_edit.setText(text)
+                self._log(f"已自动从剪贴板填入链接: {text}")
+        except Exception:
+            pass
 
     def _load_cfg_to_ui(self):
         for i in range(self.fmt_combo.count()):
@@ -255,6 +293,7 @@ class MainWindow(QMainWindow):
         img_fmt = self.img_combo.currentData()
         block_ads = self.block_ads_check.isChecked()
         route = self.route_combo.currentData()
+        start_p, end_p = parse_page_range(self.range_edit.text())
 
         self._stop_flag = False
         self.btn_fetch.setEnabled(False)
@@ -270,6 +309,8 @@ class MainWindow(QMainWindow):
                     image_format=img_fmt,
                     block_ads=block_ads,
                     route=route,
+                    start_page=start_p,
+                    end_page=end_p,
                     should_stop=lambda: self._stop_flag,
                     on_progress=self._progress_safe,
                 )
@@ -320,7 +361,7 @@ class MainWindow(QMainWindow):
             self._log(f"[!] {tip}")
             QMessageBox.warning(self, "内容不完整", tip)
 
-        if result.page_count == 0:
+        if result.page_count == 0 and not result.pdf_bytes:
             QMessageBox.critical(self, "抓取失败", "没有抓到任何页面，详情见日志。")
             return
 
@@ -343,24 +384,33 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(False)
 
     # ------------------------------------------------------------------
-    def _do_export(self, auto_open: bool = False):
-        """执行导出, 返回生成的文件路径列表。"""
+    def _do_export(self, out_dir: Path | None = None, auto_open: bool = False):
+        """在后台线程执行导出, 避免主界面卡顿。"""
         if self._result is None:
-            return []
+            return
         fmt = self.fmt_combo.currentData()
-        out_dir = Path(self.cfg.output_dir)
-        try:
-            paths = exp.export(self._result, fmt, out_dir)
-            for p in paths:
-                self._log(f"已导出: {p}")
-            if paths and auto_open:
-                self._open_in_explorer(paths[0])
-            return paths
-        except Exception as e:
-            write_log(traceback.format_exc())
-            self._log(f"导出失败: {e}")
-            QMessageBox.critical(self, "导出失败", str(e))
-            return []
+        target_dir = out_dir or Path(self.cfg.output_dir)
+        self.btn_export.setEnabled(False)
+        self._log(f"正在导出 ({fmt.upper()})...")
+
+        def task():
+            try:
+                paths = exp.export(self._result, fmt, target_dir)
+                for p in paths:
+                    self._log_safe(f"已导出: {p}")
+                if paths and auto_open:
+                    self._open_in_explorer(paths[0])
+            except Exception as e:
+                write_log(traceback.format_exc())
+                self._log_safe(f"导出失败: {e}")
+            finally:
+                QMetaObject.invokeMethod(self, "_on_export_finished", Qt.QueuedConnection)
+
+        threading.Thread(target=task, daemon=True).start()
+
+    @Slot()
+    def _on_export_finished(self):
+        self.btn_export.setEnabled(True)
 
     def on_export(self):
         if self._result is None:
@@ -369,17 +419,7 @@ class MainWindow(QMainWindow):
             self, "选择输出目录", self.cfg.output_dir)
         if not out_dir:
             return
-        fmt = self.fmt_combo.currentData()
-        try:
-            paths = exp.export(self._result, fmt, Path(out_dir))
-            for p in paths:
-                self._log(f"已导出: {p}")
-            if paths:
-                self._open_in_explorer(paths[0])
-        except Exception as e:
-            write_log(traceback.format_exc())
-            self._log(f"导出失败: {e}")
-            QMessageBox.critical(self, "导出失败", str(e))
+        self._do_export(out_dir=Path(out_dir), auto_open=True)
 
     @staticmethod
     def _open_in_explorer(path: Path):
@@ -428,7 +468,47 @@ class MainWindow(QMainWindow):
         self.btn_diag.setEnabled(True)
 
 
+def run_cli(args) -> int:
+    """命令行模式执行。"""
+    url = args.url.strip()
+    fmt = args.format.lower()
+    out_dir = Path(args.out) if args.out else app_dir()
+    start_p, end_p = parse_page_range(args.range or "")
+    print(f"[CLI] 开始抓取: {url}")
+    print(f"[CLI] 格式: {fmt} | 线路: {args.route or '自动'} | 页码: {start_p}~{end_p or '全篇'} | 目标: {out_dir}")
+
+    crawler = DocCrawler(
+        headless=args.headless,
+        log=print,
+        image_format=args.img,
+        route=args.route or "",
+        start_page=start_p,
+        end_page=end_p,
+    )
+    result = crawler.crawl(url)
+    if result.page_count == 0 and not result.pdf_bytes:
+        print("[CLI 失败] 未抓取到任何内容")
+        return 1
+    paths = exp.export(result, fmt, out_dir)
+    for p in paths:
+        print(f"[CLI 成功] 已导出: {p}")
+    return 0
+
+
 def main():
+    import argparse
+    if any(arg.startswith("--url") for arg in sys.argv):
+        parser = argparse.ArgumentParser(description="阅页 Yueye · 命令行抓取工具")
+        parser.add_argument("--url", required=True, help="目标网页/文档 URL")
+        parser.add_argument("--format", default="pdf", choices=["pdf", "word", "markdown", "text", "images"], help="输出格式")
+        parser.add_argument("--out", default="", help="输出目录（留空为程序所在目录）")
+        parser.add_argument("--route", default="", choices=["", "reader", "article", "shot"], help="抓取线路")
+        parser.add_argument("--range", default="", help="页码范围，如 1-10")
+        parser.add_argument("--headless", action="store_true", help="无头模式（不建议）")
+        parser.add_argument("--img", default="png", choices=["png", "jpeg"], help="图片格式")
+        args = parser.parse_args()
+        sys.exit(run_cli(args))
+
     try:
         cfg = load_config()
         write_log("=" * 40)

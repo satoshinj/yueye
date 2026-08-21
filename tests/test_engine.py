@@ -31,7 +31,7 @@ _fails = []
 
 
 def check(name, cond, detail=""):
-    print(f"  [{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail else ""))
+    print(f"  [{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail else ""), flush=True)
     if not cond:
         _fails.append(name)
 
@@ -181,6 +181,43 @@ def t8_hint_not_paywall():
     check("页面互不重复", len(hs) == len(set(hs)))
 
 
+def t9_article_markdown():
+    """文章线路：验证 Markdown 导出不抛异常且内容完整。"""
+    print("\nT9 文章线路 Markdown 导出")
+    from crawler import DocCrawler
+    r = DocCrawler(headless=True, log=lambda m: None, block_ads=False).crawl(ARTICLE)
+    OUT.mkdir(exist_ok=True)
+    try:
+        md_file = exp.export(r, "markdown", OUT)[0]
+        check("Markdown 文件已生成", md_file.exists() and md_file.stat().st_size > 0)
+        content = md_file.read_text(encoding="utf-8")
+        check("Markdown 包含正文", "风险辨识" in content)
+        check("无假图片引用", "## 页面图像" not in content)
+    except Exception as e:
+        check("Markdown 导出无异常", False, str(e))
+
+
+def t10_page_range():
+    """页码范围截取：验证 start_page 与 end_page 生效。"""
+    print("\nT10 指定页码范围抓取（第 3 ~ 5 页）")
+    r = DocCrawler(headless=True, adapter=Doc88(), start_page=3, end_page=5,
+                   log=lambda m: None, block_ads=False).crawl(FIXTURE)
+    check("抓取恰好 3 页", r.page_count == 3, f"实际 {r.page_count}")
+    hs = [hashlib.md5(p.screenshot).hexdigest() for p in r.pages if p.screenshot]
+    check("页面互不重复", len(hs) == len(set(hs)))
+
+
+def t11_stop_immediately():
+    """停止响应性：置位 should_stop 应立即终止。"""
+    print("\nT11 停止信号即时响应")
+    t0 = time.time()
+    r = DocCrawler(headless=True, adapter=Doc88(), should_stop=lambda: True,
+                   log=lambda m: None, block_ads=False).crawl(FIXTURE)
+    el = time.time() - t0
+    check("极短时间退出", el < 3.0, f"耗时 {el:.2f}s")
+    check("停止原因标记", "用户已停止" in r.stopped_reason or r.page_count == 0)
+
+
 if __name__ == "__main__":
     full = t1_full()
     part = t2_paywall()
@@ -189,6 +226,9 @@ if __name__ == "__main__":
     t5_article()
     t6_autoreader()
     t8_hint_not_paywall()
+    t9_article_markdown()
+    t10_page_range()
+    t11_stop_immediately()
     print("\n" + "=" * 50)
     if _fails:
         print(f"FAILED ({len(_fails)}): " + ", ".join(_fails))

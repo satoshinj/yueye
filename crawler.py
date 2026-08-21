@@ -64,6 +64,7 @@ class DocCrawler:
 
     def __init__(self, headless: bool = False, cookies=None, user_agent: str | None = None,
                  log=None, image_format: str = "png", max_pages: int = 2000,
+                 start_page: int = 1, end_page: int | None = None,
                  render_timeout: float = 8.0, poll_interval: float = 0.08,
                  should_stop=None, on_progress=None, block_ads: bool = True,
                  block_wait: float = 180.0, adapter=None, route: str = "",
@@ -74,6 +75,8 @@ class DocCrawler:
         self.log = log or (lambda msg: None)
         self.image_format = image_format
         self.max_pages = max_pages
+        self.start_page = max(1, start_page)
+        self.end_page = end_page
         self.render_timeout = render_timeout
         self.poll_interval = poll_interval
         self.should_stop = should_stop or (lambda: False)
@@ -162,15 +165,20 @@ class DocCrawler:
             adapter.dismiss_overlay(page, self.log)
 
         # 先预热：阅读器刚打开时往往还没缓存好，直接开抓容易前几页就卡住
-        if (total or 0) > 1:
+        if self.start_page == 1 and (total or 0) > 1:
             self._warm_up(page, adapter)
+        elif self.start_page > 1:
+            self.log(f"直接跳转至起始页: 第 {self.start_page} 页")
+            adapter.goto_page(page, self.start_page)
+            page.wait_for_timeout(1000)
 
-        limit = min(total or self.max_pages, self.max_pages)
+        effective_end = self.end_page or total or self.max_pages
+        limit = min(effective_end, total or self.max_pages, self.max_pages)
         seen: dict[str, int] = {}
         seen_thumbs: set[str] = set()
         self._at_end = False
 
-        n = 1
+        n = self.start_page
         fails = 0
         while n <= limit:
             if self.should_stop():
@@ -179,7 +187,7 @@ class DocCrawler:
                 break
 
             # --- 翻页 ---
-            if n > 1 and not self._turn_to(page, adapter, n, seen_thumbs):
+            if (n > 1 or (self.start_page > 1 and n == self.start_page)) and not self._turn_to(page, adapter, n, seen_thumbs):
                 fails += 1
                 if self._at_end or fails >= self.max_retries:
                     result.stopped_reason = self._diagnose_stall(page, adapter, n)
@@ -353,11 +361,15 @@ class DocCrawler:
         （阅读器还没缓存出来）；先翻到第 2 页再回到第 1 页，后续就顺了。
         """
         try:
+            if self.should_stop():
+                return
             cur = adapter.current_page(page)
             if cur is None:
                 return
             adapter.goto_page(page, 2)
             page.wait_for_timeout(1200)
+            if self.should_stop():
+                return
             adapter.dismiss_overlay(page, self.log)
             adapter.goto_page(page, 1)
             page.wait_for_timeout(900)
@@ -371,6 +383,8 @@ class DocCrawler:
         last = ""
         stable = 0
         while time.time() < deadline:
+            if self.should_stop():
+                return
             h = adapter.thumb_hash(page, 1)
             if h and h != "ERR" and h == last:
                 stable += 1
@@ -389,7 +403,11 @@ class DocCrawler:
         """
         wait = 1.2 * fails          # 1.2s / 2.4s / 3.6s ...
         self.log(f"第 {n} 页{why}，{wait:.1f}s 后重试（{fails}/{self.max_retries}）")
-        page.wait_for_timeout(int(wait * 1000))
+        steps = max(1, int(wait / 0.2))
+        for _ in range(steps):
+            if self.should_stop():
+                return
+            page.wait_for_timeout(200)
         adapter.dismiss_overlay(page, self.log)
         # 重新下达一次跳页，把阅读器拉回目标页
         try:
@@ -403,6 +421,8 @@ class DocCrawler:
         # 第一次翻页时阅读器往往还在初始化，给双倍时间
         timeout = self.render_timeout * (2 if n == 2 else 1)
         for attempt in range(3):
+            if self.should_stop():
+                return False
             if not adapter.goto_page(page, n):
                 page.wait_for_timeout(300)
                 continue
@@ -438,6 +458,8 @@ class DocCrawler:
         deadline = time.time() + (timeout or self.render_timeout)
         last = ""
         while time.time() < deadline:
+            if self.should_stop():
+                return False
             page.wait_for_timeout(int(self.poll_interval * 1000))
             h = adapter.thumb_hash(page, n)
             if not h or h == "ERR":

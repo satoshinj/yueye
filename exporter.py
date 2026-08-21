@@ -36,7 +36,7 @@ def _strip_alpha(data: bytes) -> bytes:
             return data
         img = img.convert("RGB")
         buf = io.BytesIO()
-        img.save(buf, format="PNG", optimize=True)
+        img.save(buf, format="PNG")
         return buf.getvalue()
     except Exception:
         return data
@@ -96,19 +96,23 @@ def export_text(result, out_path: Path) -> Path:
 
 # ---------------------------------------------------------------------------
 def export_markdown(result, out_path: Path) -> Path:
-    """导出 Markdown（附带图片引用）。"""
-    img_dir = out_path.with_suffix(".assets")
-    rel_dir = img_dir.name
-    paths = export_images(result, img_dir)
-
+    """导出 Markdown（附带图片引用，若有）。"""
     md = [f"# {result.title}", "", f"> 来源: {result.url}", ""]
     if result.total_pages:
         md.append(f"> 抓取 {result.page_count} / {result.total_pages} 页")
     if result.stopped_reason:
         md.append(f"> 提前结束: {result.stopped_reason}")
-    md += ["", result.full_text, "", "## 页面图像"]
-    for i, p in enumerate(paths):
-        md.append(f"![第{i + 1}页]({rel_dir}/{p.name})")
+    md += ["", result.full_text]
+
+    has_images = any(p.screenshot for p in result.pages)
+    if has_images:
+        img_dir = out_path.with_suffix(".assets")
+        rel_dir = img_dir.name
+        paths = export_images(result, img_dir)
+        md += ["", "## 页面图像"]
+        for i, p in enumerate(paths):
+            md.append(f"![第{i + 1}页]({rel_dir}/{p.name})")
+
     out_path.write_text("\n".join(md), encoding="utf-8")
     return out_path
 
